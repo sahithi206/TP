@@ -6,7 +6,7 @@ irradiance_data = [1.14, 2.3, 3.78, 5.08, 5.75, 6.27, ...
 
 % Define number of states
 num_load_states = 10;
-num_irrad_states = 9;
+num_irrad_states = 9;s
 
 % Compute actual min and max of load data
 load_min = floor(min(load_data)); % Round down

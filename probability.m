@@ -64,4 +64,3 @@ disp(gamma_St_values);
 gamma_Ct = gamma_Lt_values * gamma_St_values';
 
 disp(gamma_Ct)
-

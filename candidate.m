@@ -1,6 +1,5 @@
-run("distribute.m")
-
-V_base = results.bus(:, 8);  % Extract initial voltage magnitudes
+run('demand.m'); 
+V_base = results.bus(:, 8);  
 
 mpc.bus(:, 3) = mpc.bus(:, 3) * 1.072;  % Increase active power demand (P)
 mpc.bus(:, 4) = mpc.bus(:, 4) * 1.072;  % Increase reactive power demand (Q)

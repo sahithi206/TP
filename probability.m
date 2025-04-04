@@ -10,7 +10,7 @@ mean_load = mean(load_means);
 std_load = std(load_means);
 
 % Define 9 load states (equally spaced)
-num_states = 9;
+num_states = 2;
 load_min = mean_load - 3 * std_load;
 load_max = mean_load + 3 * std_load;
 state_bounds = linspace(load_min, load_max, num_states + 1);
@@ -41,12 +41,12 @@ if std_normalized > 0
     beta_param = (1 - mean_normalized) * ((mean_normalized * (1 - mean_normalized)) / std_normalized^2 - 1);
 else
     alpha = 1; 
-    beta_param = 1; % Default values to prevent division by zero
+    beta_param = 1; 
 end
 min_val=irrad_min;
 max_val=irrad_max;
-% Compute Gamma St values (probabilities for each irradiance state)
-num_solar_states = 10;
+
+num_solar_states = 2;
 state_bounds_normalized = linspace(0, 1, num_solar_states + 1);
 state_bounds_original = min_val + state_bounds_normalized * (max_val - min_val);
 state_bounds_pairs = [state_bounds_original(1:end-1)', state_bounds_original(2:end)'];

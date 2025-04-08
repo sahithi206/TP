@@ -20,7 +20,9 @@ V_without_DG = results_without_DG.bus(:, 8);  % Voltage magnitudes (p.u.)
 % 3. Optimization setup
 lb = repmat(S_B_min, 1, length(DG_buses)); % Lower bounds
 ub = repmat(S_B_max, 1, length(DG_buses)); % Upper bounds
-x0 = [0.04,0.04,0.04,0.04,0.04]; % Initial guess within bounds
+disp(lb);
+disp(ub);
+x0 = 0.04 * ones(length(DG_buses), 1);
 
 function [V, I, P_flow, Q_flow] = SolvePowerFlow(x, load_state, solar_state)
     global load_state_factors DG_buses mpc V_with_DG;
@@ -36,7 +38,6 @@ function [V, I, P_flow, Q_flow] = SolvePowerFlow(x, load_state, solar_state)
         if DG_buses(i) == 0
             continue;
         end
-        
         newGen = zeros(1, 21);
         newGen(1, 1) = DG_buses(i);
         newGen(1, 2) = x(i);
@@ -58,7 +59,7 @@ function [V, I, P_flow, Q_flow] = SolvePowerFlow(x, load_state, solar_state)
         end
     end
     
-    mpc_mod.gencost = repmat([2, 0, 0, 3, 0.1, 5, 0], length(DG_buses), 1);
+    mpc_mod.gencost = repmat([2, 0, 0, 3, 0.1, 5, 0], length(DG_buses)+1, 1);
     results = runpf(mpc_mod);
    V_with_DG = results.bus(:, 8); 
     V = results.bus(:, 8);
@@ -174,7 +175,6 @@ plot(bus_numbers, V_with_DG(bus_numbers), '-', 'Color', [0.85 0.325 0.098], ... 
     
     % Add legend
     legend('Location', 'best');
-    
     hold off;
     
     % Save figure

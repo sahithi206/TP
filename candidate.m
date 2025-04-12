@@ -15,8 +15,7 @@ disp("VRI"+VRI);
 candidate_buses = find(VRI >0.00718);
 
 DG_buses=candidate_buses;  % Adjusted threshold
-disp("Buses");
-disp(candidate_buses)
+
 candidates_matrix = [candidate_buses, VRI(candidate_buses)];
 
 % Display Results

@@ -2,7 +2,7 @@ clear; clc;
 close all;
 run('probability.m')
 run('candidate.m')
-global DG_buses voltage_limits S_B_min S_B_max I_max pf load_state_factors demand num_states mpc num_solar_states  gamma_Ct;
+global DG_buses voltage_limits S_B_min S_B_max I_max pf load_state_factors demand num_states mpc x0 num_solar_states  gamma_Ct;
 global V_without_DG  V_with_DG;
 
 % 1. Define system parameters
@@ -25,51 +25,59 @@ disp(ub);
 x0 = 0.04 * ones(length(DG_buses), 1);
 
 function [V, I, P_flow, Q_flow] = SolvePowerFlow(x, load_state, solar_state)
+    % SolvePowerFlow performs power flow analysis with optional distributed generation (DG).
     global load_state_factors DG_buses mpc V_with_DG;
     mpc_mod = mpc;
+
     load_factor = load_state_factors(load_state);
-    mpc_mod.bus(:, 3) = mpc.bus(:, 3) * load_factor;
-    mpc_mod.bus(:, 4) = mpc.bus(:, 4) * load_factor;
-    
+    mpc_mod.bus(:, 3) = mpc.bus(:, 3) * load_factor;  % Pd (real power demand)
+    mpc_mod.bus(:, 4) = mpc.bus(:, 4) * load_factor;  % Qd (reactive power demand)
+
+    % Retain only the slack generator initially
     mpc_mod.gen = mpc_mod.gen(1,:);
     mpc_mod.gencost = mpc_mod.gencost(1,:);
-    
-    for i = 1:length(DG_buses)
-        if DG_buses(i) == 0
-            continue;
-        end
-        newGen = zeros(1, 21);
-        newGen(1, 1) = DG_buses(i);
-        newGen(1, 2) = x(i);
-        newGen(1, 3) = 0;
-        newGen(1, 4) = 100;
-        newGen(1, 5) = -100;
-        newGen(1, 6) = 1.0;
-        newGen(1, 7) = 100;
-        newGen(1, 8) = 1;
-        newGen(1, 9) = x(i);
-        newGen(1, 10) = 0;
-        
-        if isempty(mpc_mod.gen)
-            mpc_mod.gen = newGen;
-        elseif DG_buses(i) == 0
-            break;
-        else
-            mpc_mod.gen = [mpc_mod.gen; newGen];
-        end
-    end
-    
-    mpc_mod.gencost = repmat([2, 0, 0, 3, 0.1, 5, 0], length(DG_buses)+1, 1);
-    results = runpf(mpc_mod);
-   V_with_DG = results.bus(:, 8); 
-    V = results.bus(:, 8);
-V_from = results.bus(results.branch(:,1), 8);
-V_to = results.bus(results.branch(:,2), 8);
 
-Z = results.branch(:,3) + 1j*results.branch(:,4);
-I = abs((V_from - V_to) ./ Z);    
-P_flow = results.branch(:, 14);
-    Q_flow = results.branch(:, 15);
+    % Add distributed generators (DGs) to the system at Candidate buses
+    for i = 1:length(DG_buses)
+
+        % Create a new generator entry
+        newGen = zeros(1, 21);
+        newGen(1, 1) = DG_buses(i);   % Bus number
+        newGen(1, 2) = x(i);          % Pg (active power)
+        newGen(1, 3) = 0;             % Qg (reactive power)
+        newGen(1, 4) = 100;           % Qmax
+        newGen(1, 5) = -100;          % Qmin
+        newGen(1, 6) = 1.0;           % Voltage magnitude setpoint
+        newGen(1, 7) = 100;           % Mbase
+        newGen(1, 8) = 1;             % Generator status (1 = online)
+        newGen(1, 9) = x(i);          % Pmax
+        newGen(1, 10) = 0;            % Pmin
+        
+        % Append this generator to the generator matrix
+        mpc_mod.gen = [mpc_mod.gen; newGen];
+    end
+
+    % Define the generator cost model (quadratic cost curve) for all generators
+    mpc_mod.gencost = repmat([2, 0, 0, 3, 0.1, 5, 0], length(DG_buses)+1, 1);
+
+    % Run power flow on the modified case
+    results = runpf(mpc_mod);
+
+    V_with_DG = results.bus(:, 8);  
+    V = results.bus(:, 8);         
+
+    % Compute sending and receiving end voltages for each branch
+    V_from = results.bus(results.branch(:,1), 8);
+    V_to = results.bus(results.branch(:,2), 8);
+
+    % Compute branch impedances (Z = R + jX)
+    Z = results.branch(:,3) + 1j*results.branch(:,4);
+
+    % Compute branch current magnitudes using Ohm’s Law: I = (V_from - V_to) / Z
+    I = abs((V_from - V_to) ./ Z);    
+
+    P_flow = results.branch(:, 14);  % Pf (real power flow)
+    Q_flow = results.branch(:, 15);  % Qf (reactive power flow)
 end
 
 function P_Loss = MinPLoss(x)
@@ -87,7 +95,7 @@ end
 function [c, ceq] = PowerConstraintsMulti(x)
     global num_states num_solar_states mpc gamma_Ct;
     
-    c = []; % Empty array to store inequality constraints
+    c = []; % inequality constraints
     ceq = []; % No equality constraints
     
     for i = 1:num_states

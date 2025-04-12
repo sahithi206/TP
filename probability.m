@@ -4,13 +4,13 @@ load_means = [0.4526, 0.4526, 0.4526, ...
               0.4919, 0.4919, 0.4919];     
 irradiance_data = [1.14, 2.3, 3.78, 5.08, 5.75, 6.27, ...
                    6.06, 5.25, 3.85, 2.51, 1.17, 0.9];
-global gamma_Ct  num_states num_solar_states;
+global gamma_Ct gamma_Lt_values num_states num_solar_states;
 % Compute combined mean and std deviation
 mean_load = mean(load_means);
 std_load = std(load_means);
 
-% Define 9 load states (equally spaced)
-num_states = 9;
+% Define  load states (equally spaced)
+num_states = 4;
 load_min = mean_load - 3 * std_load;
 load_max = mean_load + 3 * std_load;
 state_bounds = linspace(load_min, load_max, num_states + 1);
@@ -29,7 +29,6 @@ for i = 1:num_states
 
     fprintf('State %d: [%.4f, %.4f] -> Gamma Lt: %.4f\n', ...
             i, state_start, state_end, gamma_Lt_values(i));
-
 end
 
 irrad_min=min(irradiance_data);
@@ -48,7 +47,7 @@ end
 min_val=irrad_min;
 max_val=irrad_max;
 
-num_solar_states = 10;
+num_solar_states = 4;
 state_bounds_normalized = linspace(0, 1, num_solar_states + 1);
 state_bounds_original = min_val + state_bounds_normalized * (max_val - min_val);
 state_bounds_pairs = [state_bounds_original(1:end-1)', state_bounds_original(2:end)'];

@@ -2,16 +2,14 @@ clear; clc;
 close all;
 run('probability.m')
 run('candidate.m')
-global  load_state_factors demand num_states mpc num_solar_states  gamma_Lt_values;
+global  load_state_factors demand num_states mpc num_solar_states  gamma_Ct ploss V_without_DG;
 
 load_state_factors = linspace(load_min,load_max, num_states);
-demand = mean(load_means)*40;
-
 results_without_DG = runpf(mpc);
-V_without_DG = results_without_DG.bus(:, 8); 
+V_without_DG=results_without_DG.bus(:,8);
 
-function [V, I, P_flow, Q_flow] = SolvePowerFlow( load_state)
-    global load_state_factors  mpc;
+function [V, I, P_flow, Q_flow] = SolvePowerFlow( load_state,solar_state)
+    global load_state_factors  mpc V_without_DG;
     mpc_mod = mpc;
     load_factor = load_state_factors(load_state);
     mpc_mod.bus(:, 3) = mpc.bus(:, 3) * load_factor;
@@ -27,18 +25,18 @@ P_flow = results.branch(:, 14);
 end
 
 function P_Loss = MinPLoss()
-    global  num_states num_solar_states mpc gamma_Lt_values;
+    global num_states num_solar_states mpc gamma_Ct ;
     P_Loss = 0;
     for i = 1:num_states
-            [V, I, P_flow, Q_flow] = SolvePowerFlow( i);
+        for j = 1:num_solar_states
+            [V, I, P_flow, Q_flow] = SolvePowerFlow(i, j);
             Rij = mpc.branch(:, 3);
             P_Loss_ij = sum(I.^2 .* Rij) * mpc.baseMVA;
-            P_Loss = P_Loss + P_Loss_ij * gamma_Lt_values(i) * 8760;
+            P_Loss = P_Loss + P_Loss_ij * gamma_Ct(i, j) * 8760;
+        end
     end
 end
 
-
-disp('Optimal DG sizes (MW):');
 ploss=MinPLoss();
-disp(['Annual energy loss: ', num2str(ploss), ' MWh']);
+disp(V_without_DG);
 

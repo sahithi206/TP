@@ -5,11 +5,10 @@ load_means = [0.4526, 0.4526, 0.4526, ...
 irradiance_data = [1.14, 2.3, 3.78, 5.08, 5.75, 6.27, ...
                    6.06, 5.25, 3.85, 2.51, 1.17, 0.9];
 global gamma_Ct gamma_Lt_values num_states num_solar_states;
-% Compute combined mean and std deviation
+
 mean_load = mean(load_means);
 std_load = std(load_means);
 
-% Define  load states (equally spaced)
 num_states = 4;
 load_min = mean_load - 3 * std_load;
 load_max = mean_load + 3 * std_load;
@@ -35,6 +34,9 @@ irrad_min=min(irradiance_data);
 irrad_max=max(irradiance_data);
 normalized_irradiance = (irradiance_data - irrad_min) / (irrad_max - irrad_min);
 mean_normalized = mean(normalized_irradiance);
+irrad_min=min(normalized_irradiance);
+irrad_max=max(normalized_irradiance)
+
 std_normalized = std(normalized_irradiance);
 % Compute Beta distribution parameters
 if std_normalized > 0

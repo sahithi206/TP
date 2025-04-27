@@ -4,10 +4,7 @@ run('candidate.m')
 
 global DG_buses voltage_limits S_B_min S_B_max PV_min PV_max I_max pf ...
     load_state_factors demand num_states mpc num_solar_states  ...
-    load_solar_factors irrad_min irrad_max V_without_DG V_with_DG x_opt fval V_sum ;
-
-results_without_DG = runpf(mpc);
-V_without_DG=results_without_DG.bus(:,8);
+    load_solar_factors irrad_min irrad_max V_without_DG V_with_DG;
 
 % System parameters
 voltage_limits = [0.95, 1.05];
@@ -19,7 +16,6 @@ I_max = 1;
 pf = 0.95;
 irrad_max=4;
 irrad_min=0;
-V_sum= zeros(33,1);
 
 % Load and solar factors
 load_state_factors = linspace(load_min, load_max, num_states);
@@ -30,6 +26,9 @@ demand = sum(load_means);
 %pv_buses = DG_buses(pv_indices);
 
 % Initial power flow without DGs
+results_without_DG = runpf(mpc);
+V_without_DG = results_without_DG.bus(:, 8);
+
 lb_DG = repmat(S_B_min, length(DG_buses), 1);
 ub_DG = repmat(S_B_max, length(DG_buses), 1);
 lb_PV = repmat(PV_min, length(DG_buses), 1);
@@ -40,14 +39,14 @@ lb = [lb_DG; lb_PV];
 ub = [ub_DG; ub_PV];
 
 % Initial guess
-x0_DG = 0.02*ones(length(DG_buses), 1); 
-x0_PV = 1.2*ones(length(DG_buses), 1);
+x0_DG = ones(length(DG_buses), 1); 
+x0_PV = ones(length(DG_buses), 1);
 %x0_PV(pv_indices) = 1.2;
 x0 = [x0_DG; x0_PV];
 
 % Power flow solver (same as before)
 function [V, I, P_loss] = SolvePowerFlowLoss(x, load_state, solar_state)
-    global load_state_factors load_solar_factors DG_buses mpc V_with_DG;
+    global load_state_factors load_solar_factors DG_buses mpc;
 
     mpc_mod = mpc;
     load_factor = load_state_factors(load_state);
@@ -76,7 +75,6 @@ function [V, I, P_loss] = SolvePowerFlowLoss(x, load_state, solar_state)
 
     results = runpf(mpc_mod);
     V = results.bus(:,8);
-     V_with_DG=V;
     V_from = results.bus(results.branch(:,1), 8);
     V_to = results.bus(results.branch(:,2), 8);
     Z = results.branch(:,3) + 1j*results.branch(:,4);
@@ -87,15 +85,18 @@ end
 
 % Objective function (same as before)
 function P_Loss = MinPLoss(x)
-    global num_states num_solar_states gamma_Ct mpc baseMVA DG_buses V_sum V_with_DG;
+    global num_states num_solar_states gamma_Ct mpc baseMVA DG_buses;
+
     P_Loss = 0;
-    V_sum= zeros(33,1);
     for i = 1:num_states
         for j = 1:num_solar_states
             [V,I,~] = SolvePowerFlowLoss(x, i, j);
             Rij = mpc.branch(:, 3);
-            P_Loss = P_Loss + sum(I.^2 .* Rij) * mpc.baseMVA * gamma_Ct(i,j) * 8760;
-           V_sum = V_sum + V;
+            if any(x(length(DG_buses)+1:end) < 0)
+                P_Loss = P_Loss + sum((x(length(DG_buses)+1:end) < 0) * 1e6);
+            else
+                P_Loss = P_Loss + sum(I.^2 .* Rij) * mpc.baseMVA * gamma_Ct(i,j) * 8760;
+            end
         end
     end
 end
@@ -123,7 +124,7 @@ end
 % Optimization options
 options = optimoptions('fmincon', ...
     'Display', 'iter', ...
-    'Algorithm', 'interior-point', ...
+    'Algorithm', 'sqp', ...
     'MaxFunctionEvaluations', 50000, ...
     'MaxIterations', 4000, ...
     'StepTolerance', 1e-9, ...
@@ -133,6 +134,36 @@ options = optimoptions('fmincon', ...
 
 % Run optimization
 [x_opt, fval] = fmincon(@MinPLoss, x0, [], [], [], [], lb, ub, @PowerConstraintsWithPV, options);
+global
+V=zeros(33);
+for i=1:num_states
+ for j=1:num_solar_states
+     for i = 1:length(DG_buses)
+solar_factor=load_solar_factors(j);
+        bm_gen = x_opt(i);
+        pv_gen = x_opt(length(DG_buses) + i)*solar_factor ;
+        total_gen = bm_gen + pv_gen;
+        if total_gen > 0
+            newGen = zeros(1, 21);
+            newGen(1, 1) = DG_buses(i);
+            newGen(1, 2) = total_gen;
+            newGen(1, 6) = 1.0;
+            newGen(1, 7) = 100;
+            newGen(1, 8) = 1;
+            newGen(1, 9) = total_gen;
+            newGen(1, 10) = 0;
+            mpc.gen = [mpc.gen; newGen];
+        end
+    end
+    mpc.gencost = repmat([2, 0, 0, 3, 0.1, 5, 0], size(mpc.gen,1), 1);
+
+    results = runpf(mpc);
+    V = V + results.bus(:,8);
+ end
+ V_with_DG=V/33;
+end
+   
+
 % Results
 disp('Optimal DG sizes (MW):');
 disp('BM DGs:');
@@ -140,3 +171,8 @@ disp(x_opt(1:length(DG_buses))');
 disp('PV systems:');
 disp(x_opt(length(DG_buses)+1:end)');
 disp(['Annual energy loss: ', num2str(fval), ' MWh']);
+
+% Display PV installation information
+pv_installed = x_opt(length(DG_buses)+1:end) > 0;
+disp(['PV systems installed at buses: ', num2str(DG_buses(pv_installed)')]);
+disp(['PV sizes at these buses (MW): ', num2str(x_opt(length(DG_buses)+find(pv_installed))')]);
